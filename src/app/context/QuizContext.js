@@ -1,9 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { genQuizFrmGemini } from '../services/apiService';
-
+import { app,auth, db } from '../lib/firebase';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
+import { doc, setDoc, serverTimestamp, collection } from "firebase/firestore"; 
 
 const QuizContext = createContext();
 
@@ -22,7 +24,32 @@ export const QuizProvider = ({ children }) => {
     const [userAnswers, setUserAnswers] = useState({});
     const [showResults, setShowResults] = useState(false);
     const [score, setScore] = useState(0);
+
     const router = useRouter();
+
+    const [currentUser, setCurrentUser] = useState(null);
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, user => {
+            setCurrentUser(user);
+        });
+        return () => unsubscribe(); 
+    }, []);
+
+
+    const signInWithGoogle = async () => {
+        const provider = new GoogleAuthProvider();
+        try {
+            await signInWithPopup(auth, provider);
+        } catch (error) {
+            console.error("Error signing in with Google: ", error);
+        }
+    };
+
+    const logout = async () => {
+        await signOut(auth);
+        router.push('/');
+    };
 
     const resetQuizState = () => {
         setQuiz(null);
@@ -55,7 +82,7 @@ export const QuizProvider = ({ children }) => {
         }));
     };
 
-    const handleSubmitQuiz = () => {
+    const handleSubmitQuiz = async() => {
         let correctCount = 0;
         quiz.forEach((q, index) => {
             if (userAnswers[index] === q.correctAnswer) {
@@ -64,7 +91,29 @@ export const QuizProvider = ({ children }) => {
         });
         setScore(correctCount);
         setShowResults(true);
-        router.push('/results'); 
+        // router.push('/results');
+        
+        if (currentUser) {
+            const quizResult = {
+                topic: topic,
+                difficulty: difficulty,
+                score: correctCount,
+                totalQuestions: quiz.length,
+                userAnswers: userAnswers,
+                quizData: quiz, 
+                completedAt: serverTimestamp()
+            };
+            try {
+                
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'; 
+                const historyRef = doc(collection(db, "artifacts", appId, "users", currentUser.uid, "quizHistory")); 
+                await setDoc(historyRef, quizResult);
+                console.log("Quiz result saved!");
+            } catch (e) {
+                console.error("Error adding document: ", e);
+            }
+        }
+        router.push('/results');
     };
 
     const handleStartNewQuiz = () => {
@@ -76,6 +125,9 @@ export const QuizProvider = ({ children }) => {
 
     
     const value = {
+        currentUser,
+        signInWithGoogle,
+        logout,
         topic, setTopic,
         difficulty, setDifficulty,
         numQuestions, setNumQuestions,

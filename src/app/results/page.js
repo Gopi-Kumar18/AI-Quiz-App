@@ -5,12 +5,10 @@ import { useQuiz } from '../context/QuizContext';
 const QuizResults = () => {
     const { quiz, userAnswers, score, handleStartNewQuiz } = useQuiz();
 
-    
     if (!quiz) {
         return null;
     }
    
-
     return (
         <div className="mt-8 p-6 bg-white rounded-xl shadow-2xl border-2 border-teal-200">
             <h2 className="text-3xl font-bold text-teal-700 mb-6 text-center">Quiz Results</h2>
